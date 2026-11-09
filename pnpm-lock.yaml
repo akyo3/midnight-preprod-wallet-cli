@@ -182,6 +182,9 @@ importers:
       '@types/node':
         specifier: 26.6.6
         version: 26.6.6
+      prettier:
+        specifier: ^3.9.10
+        version: 3.9.10
       tsx:
         specifier: 4.23.15
         version: 4.23.15
@@ -909,6 +912,11 @@ packages:
 
   node-gyp-build-optional-packages@5.2.2:
     resolution: {integrity: sha512-s+w+rBWnpTMwSFbaE0UXsRlg7hU4FjekKU4eyAih5T8nJuNZT1nNsskXpxmeqSK9UzkBl6UgRlnKc8hz8IEqOw==}
+    hasBin: true
+
+  prettier@3.9.10:
+    resolution: {integrity: sha512-skGHTH1Yb9QvaTC4hWnRTzEYtCpApF0UMBPz+t/0ZPzP8ihefo/btKd+QA7pUE0fEwA1SbS/NmhyEcstdXOIdA==}
+    engines: {node: '>=14'}
     hasBin: true
 
   propagate@2.0.1:
@@ -1841,6 +1849,8 @@ snapshots:
     dependencies:
       detect-libc: 2.1.2
     optional: true
+
+  prettier@3.9.10: {}
 
   propagate@2.0.1: {}
 
