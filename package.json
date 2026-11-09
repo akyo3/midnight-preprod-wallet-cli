@@ -1,0 +1,50 @@
+{
+  "name": "midnight-preprod-wallet-cli",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A focused Midnight Wallet SDK reference CLI for Preprod",
+  "scripts": {
+    "start": "node --env-file=.env --import tsx src/index.ts",
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "address": "node --env-file=.env --import tsx src/index.ts address",
+    "balance": "node --env-file=.env --import tsx src/index.ts balance",
+    "history": "node --env-file=.env --import tsx src/index.ts history",
+    "register-dust": "node --env-file=.env --import tsx src/index.ts register-dust",
+    "deregister-dust": "node --env-file=.env --import tsx src/index.ts deregister-dust",
+    "redesignate-dust": "node --env-file=.env --import tsx src/index.ts redesignate-dust",
+    "send": "node --env-file=.env --import tsx src/index.ts send",
+    "send-shielded": "node --env-file=.env --import tsx src/index.ts send-shielded",
+    "send-combined": "node --env-file=.env --import tsx src/index.ts send-combined"
+  },
+  "keywords": [
+    "midnight",
+    "wallet",
+    "typescript",
+    "zero-knowledge"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.16.1",
+      "onFail": "download"
+    }
+  },
+  "packageManager": "pnpm@12.16.1",
+  "type": "module",
+  "dependencies": {
+    "@midnight-ntwrk/ledger-v8": "8.1.3",
+    "@midnight-ntwrk/wallet-sdk": "1.2.0",
+    "@scure/base": "2.4.0",
+    "rxjs": "7.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}
