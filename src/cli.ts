@@ -3,7 +3,9 @@ const MICRO_NIGHT = 1_000_000n;
 export function parseNightAmount(value: string): bigint {
   const match = /^(0|[1-9]\d*)(?:\.(\d{1,6}))?$/.exec(value);
   if (!match) {
-    throw new Error("Amount must be a positive NIGHT value with at most 6 decimal places.");
+    throw new Error(
+      "Amount must be a positive NIGHT value with at most 6 decimal places.",
+    );
   }
 
   const whole = BigInt(match[1]);
@@ -15,7 +17,9 @@ export function parseNightAmount(value: string): bigint {
 
 export function parseBaseUnits(value: string): bigint {
   if (!/^[1-9]\d*$/.test(value)) {
-    throw new Error("Amount must be a positive integer in the token's base units.");
+    throw new Error(
+      "Amount must be a positive integer in the token's base units.",
+    );
   }
   return BigInt(value);
 }
@@ -30,7 +34,9 @@ export function parseTokenType(value: string): string {
 export function parseSendArguments(args: string[], command = "send") {
   const values = withoutSeparator(args);
   if (values.length !== 2 || !values[0]) {
-    throw new Error(`Usage: pnpm ${command} <recipientAddress> <amountInNight>`);
+    throw new Error(
+      `Usage: pnpm ${command} <recipientAddress> <amountInNight>`,
+    );
   }
   return { recipient: values[0], amount: parseNightAmount(values[1]) };
 }
@@ -76,3 +82,47 @@ export function parseSingleArgument(args: string[], usage: string): string {
   if (values.length !== 1 || !values[0]) throw new Error(usage);
   return values[0];
 }
+
+/** Validate command syntax before loading or creating a wallet seed. */
+export function parseCommand(command: string, args: string[]) {
+  const values = withoutSeparator(args);
+  switch (command) {
+    case "address":
+    case "balance":
+    case "register-dust":
+    case "deregister-dust":
+      if (values.length !== 0) throw new Error(`Usage: pnpm ${command}`);
+      return { command };
+    case "history": {
+      if (
+        values.length > 1 ||
+        (values[0] !== undefined && !/^[0-9a-f]{64}$/i.test(values[0]))
+      ) {
+        throw new Error(
+          "Usage: pnpm history [history-hash: 64 hexadecimal characters]",
+        );
+      }
+      return { command, hash: values[0]?.toLowerCase() };
+    }
+    case "redesignate-dust":
+      return {
+        command,
+        receiver: parseSingleArgument(
+          values,
+          "Usage: pnpm redesignate-dust <recipientDustAddress>",
+        ),
+      };
+    case "send":
+      return { command, ...parseSendArguments(values) };
+    case "send-shielded":
+      return { command, ...parseShieldedSendArguments(values) };
+    case "send-combined":
+      return { command, ...parseCombinedSendArguments(values) };
+    default:
+      throw new Error(
+        `Unknown command: ${command}. Run pnpm start -- --help for usage.`,
+      );
+  }
+}
+
+export type ParsedCommand = ReturnType<typeof parseCommand>;

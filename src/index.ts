@@ -6,28 +6,11 @@ import { historyCommand } from "./commands/history";
 import { redesignateDustCommand } from "./commands/redesignate-dust";
 import { registerDustCommand } from "./commands/register-dust";
 import { sendCommand } from "./commands/send";
-import {
-  parseCombinedSendArguments,
-  parseSendArguments,
-  parseShieldedSendArguments,
-  parseSingleArgument,
-} from "./cli";
+import { parseCommand, type ParsedCommand } from "./cli";
 import { loadOrCreateSeed } from "./seed";
 
-const commands = new Set([
-  "address",
-  "balance",
-  "deregister-dust",
-  "history",
-  "redesignate-dust",
-  "register-dust",
-  "send",
-  "send-combined",
-  "send-shielded",
-]);
-
-async function runCommand(cmd: string, seed: Buffer) {
-  switch (cmd) {
+async function runCommand(parsed: ParsedCommand, seed: Buffer) {
+  switch (parsed.command) {
     case "address":
       addressCommand(seed);
       break;
@@ -41,37 +24,31 @@ async function runCommand(cmd: string, seed: Buffer) {
       await deregisterDustCommand(seed);
       break;
     case "redesignate-dust":
-      await redesignateDustCommand(
-        seed,
-        parseSingleArgument(
-          process.argv.slice(3),
-          "Usage: pnpm redesignate-dust <recipientDustAddress>",
-        ),
-      );
+      await redesignateDustCommand(seed, parsed.receiver);
       break;
     case "history":
-      await historyCommand(seed, process.argv[3]);
+      await historyCommand(seed, parsed.hash);
       break;
     case "send": {
-      const { recipient, amount } = parseSendArguments(process.argv.slice(3));
+      const { recipient, amount } = parsed;
       await sendCommand(seed, [{ kind: "unshielded", recipient, amount }]);
       break;
     }
     case "send-shielded": {
-      const output = parseShieldedSendArguments(process.argv.slice(3));
-      await sendCommand(seed, [{ kind: "shielded", ...output }]);
+      const { recipient, tokenType, amount } = parsed;
+      await sendCommand(seed, [
+        { kind: "shielded", recipient, tokenType, amount },
+      ]);
       break;
     }
     case "send-combined": {
-      const { unshielded, shielded } = parseCombinedSendArguments(process.argv.slice(3));
+      const { unshielded, shielded } = parsed;
       await sendCommand(seed, [
         { kind: "unshielded", ...unshielded },
         { kind: "shielded", ...shielded },
       ]);
       break;
     }
-    default:
-      throw new Error(`Command is not implemented: ${cmd}`);
   }
 }
 
@@ -84,13 +61,10 @@ async function main() {
     );
     return;
   }
-  if (!commands.has(cmd)) {
-    throw new Error(`Unknown command: ${cmd}. Run pnpm start -- --help for usage.`);
-  }
-
+  const parsed = parseCommand(cmd, process.argv.slice(3));
   const seed = await loadOrCreateSeed();
   try {
-    await runCommand(cmd, seed);
+    await runCommand(parsed, seed);
   } finally {
     seed.fill(0);
   }

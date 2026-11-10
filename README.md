@@ -2,200 +2,122 @@
 
 [日本語](README.ja.md)
 
-A focused Wallet SDK reference CLI for learning and testing Midnight wallet flows on Preprod.
-
-```text
-seed → addresses → NIGHT, shielded tokens, and DUST → transfers
-```
-
-This project demonstrates:
-
-- deterministic key and address derivation from one seed;
-- unshielded NIGHT and shielded-token synchronization and transfers;
-- an atomic transfer containing both output types;
-- DUST generation backed by registered NIGHT UTxOs;
-- DUST deregistration and generation-destination changes;
-- DUST fee payment and finalized NIGHT transfers.
+A small Wallet SDK reference CLI for Midnight Preprod: derive addresses, check balances and history, manage DUST generation, and transfer NIGHT or existing shielded tokens.
 
 > [!IMPORTANT]
-> This is an educational Preprod project, not a production or Mainnet wallet. Back up `.wallet-seed` and never share it. Losing the seed means losing access to the wallet.
+> For learning and testing on Preprod. Back up your seed and keep `.wallet-seed`, `.env`, and `.wallet-state/` private. This is not a production or Mainnet wallet.
 
 ## Requirements
 
-- Node.js 22 or later
-- pnpm
-- Docker
-- A Blockfrost Midnight Preprod Project ID
+- Node.js 22 or later, pnpm, and Docker
+- A [Blockfrost](https://blockfrost.io/) Midnight **Preprod** Project ID
+- Wallet SDK `2.0.0` and Proof Server `9.0.0` for Preprod's Ledger `9.1.0.1`
 
-This repository targets **Preprod**, which still uses Ledger `8.1.3`. It pins Wallet SDK `1.2.0`, ledger `8.1.3`, and Proof Server `8.1.3` as one compatibility set. Do not replace these with the Mainnet Ledger 9 versions while using the Preprod endpoints.
-
-Mainnet and Preview use Ledger 9 with node `2.1.101`, Wallet SDK `2.0.0`, and Proof Server `9.0.0`. Those versions require a Wallet SDK 2 API migration and are outside this Preprod CLI's current scope. This project connects to Blockfrost, so it does not run a Midnight node locally and does not need the node `2.1.101` binary.
-
-When Preprod is upgraded to Ledger 9, this project must migrate the complete compatibility set together. Preprod DUST registrations will also need to be registered again after that network upgrade.
+The CLI uses Blockfrost's node and indexer; only the Proof Server runs locally. The indexer must support `4.4.101`. See the [Ledger 9 compatibility guide](https://docs.midnight.network/relnotes/ledger-9).
 
 ## Setup
 
-Create a Midnight Preprod project at [Blockfrost](https://blockfrost.io/) and copy its Project ID. A Project ID for another network cannot access Preprod.
-
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 cp .env.example .env
 ```
 
-Set the Project ID in `.env`:
+Set your Project ID in `.env`:
 
 ```dotenv
 BLOCKFROST_PROJECT_ID=your_project_id
 ```
 
-Verify the local code before connecting a wallet:
+Check the code without accessing a wallet or connecting to Preprod:
 
 ```bash
 pnpm typecheck
 pnpm test
 ```
 
-The first wallet command creates a random 32-byte seed in `.wallet-seed` with owner-only permissions. Later commands reuse the same seed and wallet.
+The first valid wallet command creates a random seed in `.wallet-seed` with owner-only permissions. Later commands reuse it.
 
-## Proof Server
+## Start the Proof Server
 
-Keep the Proof Server running in a separate terminal for every command marked **Yes** in the command table:
+Keep this running in a separate terminal for commands marked **Yes** below. Stop any old Proof Server using port 6300 first; Ledger 9 requires version `9.0.0`.
 
 ```bash
 docker run --rm \
-  -p 6300:6300 \
-  -e MIDNIGHT_PROOF_SERVER_VERBOSE=true \
-  midnightntwrk/proof-server:8.1.3
+  -p 127.0.0.1:6300:6300 \
+  midnightntwrk/proof-server:9.0.0
 ```
 
-Health check:
+Check that it responds with `status: ok`:
 
 ```bash
-curl http://localhost:6300/health
+curl --fail http://localhost:6300/health
 ```
 
-## Quick start
+## First transfer
 
-### 1. Print the wallet addresses
+1. Run `pnpm address` and copy the **Unshielded** address (`mn_addr_preprod1...`).
+2. Request tNIGHT from the [Preprod faucet](https://midnight-tmnight-preprod.nethermind.dev/).
+3. Run `pnpm balance` to wait for synchronization and check the balance.
+4. Run `pnpm register-dust`. Registration keeps your NIGHT balance and enables DUST generation for transaction fees. If the SDK reports insufficient generated DUST for registration, wait and retry.
+5. Send a small amount with `pnpm send <recipient-unshielded-address> <amount-in-night>`.
+6. Wait for `Transfer finalized`, then check `pnpm history`.
 
-```bash
-pnpm address
-```
-
-Copy the `Unshielded` address (`mn_addr_preprod1...`) into the [Midnight Preprod Faucet](https://midnight-tmnight-preprod.nethermind.dev/). Do not use the Shielded address.
-
-### 2. Check the NIGHT balance
-
-```bash
-pnpm balance
-```
-
-The faucet provides unshielded tNIGHT only. Shielded balances are separate tokens and are printed by raw token type and base-unit amount.
-
-### 3. Register NIGHT for DUST generation
-
-```bash
-pnpm register-dust
-```
-
-Registration is complete when `Registration finalized` appears. Registration does not reduce the total NIGHT balance. DUST accrues over time and pays transaction fees.
-
-### 4. Send NIGHT
-
-```bash
-pnpm send <recipient-unshielded-address> <amount-in-night>
-```
-
-Example:
-
-```bash
-pnpm send mn_addr_preprod1... 3
-```
-
-The SDK waits for finalization before printing `Transfer finalized`.
-
-### 5. Try shielded and combined transfers
-
-```bash
-pnpm send-shielded <shielded-address> <token-type> <base-units>
-pnpm send-combined \
-  <unshielded-address> <night-amount> \
-  <shielded-address> <token-type> <base-units>
-```
-
-NIGHT is unshielded. `send-shielded` spends an existing shielded token issued by a contract or received from another wallet; it does not convert faucet NIGHT into a shielded asset. Copy the token type and available base-unit balance from `pnpm balance`. Token decimals are defined by the token issuer, so the CLI accepts an integer base-unit amount rather than a NIGHT amount.
-
-The combined command spends unshielded NIGHT and an existing shielded token in one atomic transaction: either both outputs succeed or neither does. It is not a conversion between the two token kinds. A first shielded sync can be considerably slower than an unshielded sync.
-
-### 6. Inspect transaction history
-
-```bash
-pnpm history
-pnpm history <history-hash>
-```
-
-Submission commands print a ledger `Identifier`, which the node uses to track the submitted transaction. Transaction history uses a separate `History hash`. Copy the value labeled `History hash` from `pnpm history` when filtering the history; a submission identifier is not a history hash.
-
-## DUST synchronization
-
-Wallet SDK 1.x rebuilds DUST state by replaying the global Preprod DUST history. The first sync can take hours. Shielded, unshielded, and DUST state is saved per wallet and network in `.wallet-state/`; long DUST syncs are checkpointed every 10,000 events so later commands resume from the latest checkpoint.
-
-```text
-syncing... 723829/723829 transactions; DUST events 76745/1838604 (1015s)
-```
-
-- `1006:: Abnormal Closure`: the SDK retries the WebSocket connection; wait while progress continues.
-- `1000:: Normal Closure`: normal RPC shutdown after a command; not an error.
+Preprod's Ledger 9 upgrade cleared registrations not backed by cNIGHT. Existing faucet tNIGHT may need registration again; `register-dust` reports when all available coins are already registered.
 
 ## Commands
 
-| Command | Purpose | Proof Server |
-| --- | --- | --- |
-| `pnpm address` | Derive and print addresses | No |
-| `pnpm balance` | Synchronize and print balances | No |
-| `pnpm register-dust` | Register NIGHT UTxOs for DUST | Yes |
-| `pnpm send <address> <amount>` | Send unshielded NIGHT | Yes |
-| `pnpm send-shielded <address> <token-type> <base-units>` | Send an existing shielded token | Yes |
-| `pnpm send-combined <u-address> <night> <s-address> <token-type> <base-units>` | Send NIGHT and a shielded token atomically | Yes |
-| `pnpm deregister-dust` | Stop all available registered NIGHT UTxOs from generating DUST | Yes |
-| `pnpm redesignate-dust <dust-address>` | Redirect all available registered NIGHT UTxOs to another DUST address | Yes |
-| `pnpm history [history-hash]` | Print finalized transaction history | No |
-| `pnpm test` | Run unit tests | No |
+| Command                                                                        | Purpose                                                       | Proof Server |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------- | ------------ |
+| `pnpm address`                                                                 | Print Unshielded, Shielded, and DUST addresses                | No           |
+| `pnpm balance`                                                                 | Synchronize and print balances                                | No           |
+| `pnpm history [history-hash]`                                                  | List finalized history or find one entry                      | No           |
+| `pnpm register-dust`                                                           | Register available unregistered NIGHT UTxOs                   | Yes          |
+| `pnpm send <address> <night>`                                                  | Transfer unshielded NIGHT                                     | Yes          |
+| `pnpm send-shielded <address> <token-type> <base-units>`                       | Transfer an existing shielded token                           | Yes          |
+| `pnpm send-combined <u-address> <night> <s-address> <token-type> <base-units>` | Transfer both token kinds atomically                          | Yes          |
+| `pnpm deregister-dust`                                                         | Stop DUST generation for all available registered NIGHT UTxOs | Yes          |
+| `pnpm redesignate-dust <dust-address>`                                         | Redirect generation for all available registered NIGHT UTxOs  | Yes          |
 
-`deregister-dust` and `redesignate-dust` act on every currently available registered NIGHT UTxO. Both require an existing DUST balance for their transaction fee. Use `pnpm address` on the receiving wallet to obtain its `DUST` address.
+NIGHT amounts allow up to six decimal places. Shielded amounts are positive integers in the issuer's base units; copy the 64-character token type from `pnpm balance`. These commands do not convert NIGHT into shielded tokens. The combined transfer contains both outputs in one transaction.
 
-Transaction submission retries the same finalized transaction up to three times when the node connection closes. If all attempts fail, synchronize with `pnpm balance` before rebuilding it: the first attempt may have reached the node even when its response was lost.
+`deregister-dust` and `redesignate-dust` change every available registered NIGHT UTxO and require DUST for fees. Obtain the destination DUST address with `pnpm address` on the receiving wallet.
 
-## Seed configuration
+For history searches, use the **History hash** printed by `pnpm history`, not the **Identifier** printed after submission. Times are UTC; fees are in specks (1 DUST = 10¹⁵ specks).
 
-The default `.wallet-seed` file is excluded from Git and uses permission mode `600`. A different file can be selected in `.env`:
+## Saved state and history
+
+Wallet state and history are stored per wallet and network in `.wallet-state/`, or `WALLET_STATE_DIR`. These private files let later commands resume synchronization. Long DUST syncs save a checkpoint every 10,000 applied events.
+
+When an older checkpoint has no saved history, the next wallet command rebuilds NIGHT and shielded history once, keeping the DUST checkpoint. This can take longer than a normal startup. Unreadable history fails explicitly instead of being silently discarded.
+
+`history` fills missing times from finalized blocks and fetches missing fees or block information from the indexer. Retrieved details are saved for later commands. Unavailable fields remain unknown with a warning; non-regular transactions have no regular fee field and show `not applicable`.
+
+## Troubleshooting
+
+- **DUST proof rejected (`170`)**: check Proof Server `9.0.0` and indexer compatibility, then wait for DUST sync before rebuilding. See [DUST troubleshooting](https://docs.midnight.network/guides/manage-dust#dust-troubleshooting).
+- **Submission result unclear after a disconnect**: check balance and history before rebuilding; the node may already have received the transaction. Run one command at a time per wallet.
+- **Saved state cannot be restored**: move the state directory aside and resync with the same seed. Keep the original files and never delete the seed to reset synchronization.
+
+## Seed and state configuration
+
+Optional settings in `.env`:
 
 ```dotenv
 WALLET_SEED_FILE=/safe/path/to/midnight-wallet.seed
 WALLET_STATE_DIR=/safe/path/to/midnight-wallet-state
 ```
 
-CI environments may supply a 32-byte seed as 64 hexadecimal characters:
+`WALLET_SEED` can supply a 32-byte seed as 64 hexadecimal characters and takes precedence over the seed file. Never commit or share it. Older versions used a public test seed; do not use that seed for private funds.
 
-```dotenv
-WALLET_SEED=<64 hexadecimal characters>
-```
+## Code and scope
 
-Older versions used the public test seed ending in `...0001`. To move those test funds, first create and record a new wallet address, temporarily set the old seed as `WALLET_SEED`, send the funds to the new address, and then remove the environment variable. Never use that public seed for real assets.
+CLI output lives in `src/commands/`. `src/lib.ts` exports reusable operations for trusted Node.js scripts that manage their own seed. Browser DApps should use the DApp Connector API with an established wallet.
 
-## Security scope
-
-The CLI validates amounts without floating-point arithmetic, masks the Blockfrost Project ID in logs, stores wallet checkpoints in owner-only files, reverts reserved coins after failed transaction construction, and waits for transaction finalization. Wallet state reveals owned coins and must remain private. Mainnet use would additionally require encrypted or hardware-backed keys, durable storage with backup and migration, operational monitoring, transaction limits, recovery testing, and Mainnet-specific integration tests.
-
-## Project scope
-
-This repository intentionally stays a small, reusable Wallet SDK reference rather than a browser-extension wallet. DUST sponsorship, swaps, WASM proving, a wallet-side DApp Connector, multiple accounts, approval UI, and production key custody are out of scope. Future DApps should connect to an established wallet through the DApp Connector API instead of importing this CLI or exposing its seed.
-
-CLI output is kept in `src/commands/`; reusable Node.js operations are exported from `src/lib.ts`. This boundary is useful for trusted scripts that own a seed. Browser DApps must not use it: connect to a wallet through the DApp Connector API instead.
+This project does not implement production key custody, multiple accounts, swaps, DUST sponsorship, or a wallet-side DApp Connector. Amounts use `bigint`, Project IDs are masked in logs, and saved files use owner-only permissions; these measures do not make this a production wallet.
 
 ## Acknowledgements
 
-This independent, unofficial project was informed by the [Midnight Academy CLI wallet capstone](https://academy.midnight.network/learn/midnight-wallet/51-hands-on-build-a-cli-wallet-capstone-f15e7446-5ed5-82c3-a006-81a25ff9c09a) and the [official Wallet SDK developer guide](https://docs.midnight.network/sdks/official/wallet-developer-guide). It is not affiliated with or endorsed by the Midnight Foundation or HackQuest.
+An independent, unofficial project informed by the [Midnight Academy CLI wallet capstone](https://academy.midnight.network/learn/midnight-wallet/51-hands-on-build-a-cli-wallet-capstone-f15e7446-5ed5-82c3-a006-81a25ff9c09a) and [Wallet SDK developer guide](https://docs.midnight.network/sdks/official/wallet-developer-guide). Not affiliated with or endorsed by the Midnight Foundation or HackQuest.
 
 ## License
 

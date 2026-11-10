@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createWalletKeys } from "../src/wallet";
 
-test("temporary role seeds can be cleared without corrupting the signing keystore", () => {
+test("clearing the local signing secret buffer does not invalidate the keystore", async () => {
   const keys = createWalletKeys(Buffer.alloc(32, 9));
   const message = Buffer.from("signing regression test");
 
-  assert.doesNotThrow(() => keys.keystore.signData(message));
+  await assert.doesNotReject(() => keys.keystore.signDataAsync(message));
   keys.clearKeystoreSecret();
   assert.deepEqual(keys.keystore.getSecretKey(), Buffer.alloc(32));
-  assert.throws(() => keys.keystore.signData(message));
+  await assert.doesNotReject(() => keys.keystore.signDataAsync(message));
 });

@@ -6,7 +6,7 @@ import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
-} from "@midnight-ntwrk/wallet-sdk";
+} from "@midnightntwrk/wallet-sdk";
 import { NETWORK_ID } from "../config";
 import { createWalletKeys } from "../wallet";
 
@@ -20,7 +20,9 @@ export function deriveWalletAddresses(seed: Buffer): WalletAddresses {
   const keys = createWalletKeys(seed);
   try {
     const shieldedAddress = new ShieldedAddress(
-      new ShieldedCoinPublicKey(Buffer.from(keys.zswapSecretKeys.coinPublicKey, "hex")),
+      new ShieldedCoinPublicKey(
+        Buffer.from(keys.zswapSecretKeys.coinPublicKey, "hex"),
+      ),
       new ShieldedEncryptionPublicKey(
         Buffer.from(keys.zswapSecretKeys.encryptionPublicKey, "hex"),
       ),
