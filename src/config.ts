@@ -1,6 +1,6 @@
 // Preprod network endpoints and network ID.
-// https://docs.midnight.network/relnotes/network#preprod
-import { NetworkId } from "@midnight-ntwrk/wallet-sdk";
+// https://docs.midnight.network/relnotes/environments#preprod
+import { NetworkId } from "@midnightntwrk/wallet-sdk";
 import { installLogRedaction } from "./logging";
 
 export const NETWORK_ID = NetworkId.NetworkId.PreProd;

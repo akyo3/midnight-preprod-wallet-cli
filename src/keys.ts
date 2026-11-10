@@ -1,5 +1,5 @@
 // Derives the three independent wallet roles from one master seed.
-import { HDWallet, Roles } from "@midnight-ntwrk/wallet-sdk";
+import { HDWallet, Roles } from "@midnightntwrk/wallet-sdk";
 
 export type WalletRoleSeeds = {
   shielded: Uint8Array;
@@ -14,7 +14,7 @@ export function deriveWalletRoleSeeds(masterSeed: Uint8Array): WalletRoleSeeds {
   }
 
   const account = result.hdWallet.selectAccount(0);
-  const derive = (role: typeof Roles[keyof typeof Roles]) => {
+  const derive = (role: (typeof Roles)[keyof typeof Roles]) => {
     const key = account.selectRole(role).deriveKeyAt(0);
     if (key.type === "keyOutOfBounds") {
       throw new Error("The requested wallet derivation path is out of bounds.");

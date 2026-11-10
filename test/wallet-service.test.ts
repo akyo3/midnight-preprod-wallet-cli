@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import * as ledger from "@midnight-ntwrk/ledger-v8";
+import { bech32m } from "@scure/base";
+import * as ledger from "@midnightntwrk/ledger-v9";
 import {
   MidnightBech32m,
   PublicKey,
@@ -8,13 +9,14 @@ import {
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
   createKeystore,
-} from "@midnight-ntwrk/wallet-sdk";
+} from "@midnightntwrk/wallet-sdk";
 import { NETWORK_ID } from "../src/config";
 import {
   assertSufficientBalances,
   createTokenTransfers,
   decodeShieldedAddress,
   selectDustCoins,
+  submitDustRecipe,
   transfer,
   updateDustRegistration,
 } from "../src/wallet-service";
@@ -30,6 +32,79 @@ test("long shielded addresses decode with checksum and network validation", () =
   assert.ok(encoded.length > 90);
   assert.ok(decodeShieldedAddress(encoded).equals(expected));
   assert.throws(() => decodeShieldedAddress(`${encoded.slice(0, -1)}x`));
+  const decoded = bech32m.decodeToBytes(encoded, false);
+  const extendedPrefix = bech32m.encode(
+    `${decoded.prefix}_extra`,
+    bech32m.toWords(decoded.bytes),
+    false,
+  );
+  assert.throws(() => decodeShieldedAddress(extendedPrefix));
+});
+
+test("DUST finalization failure releases the fee-paying recipe", async () => {
+  type Recipe = Parameters<typeof submitDustRecipe>[1];
+  const original = { transaction: { id: "original" } } as unknown as Recipe;
+  const balanced = {
+    transaction: { id: "with-dust-fee" },
+  } as unknown as Recipe;
+  const failure = new Error("proving failed");
+  const reverted: unknown[] = [];
+  const facade = {
+    async balanceUnprovenTransaction() {
+      return balanced;
+    },
+    async finalizeRecipe(recipe: unknown) {
+      assert.equal(recipe, balanced);
+      throw failure;
+    },
+    async submitTransaction() {
+      assert.fail("must not submit after proving failure");
+    },
+    async revert(recipe: unknown) {
+      reverted.push(recipe);
+    },
+  } as unknown as Parameters<typeof submitDustRecipe>[0];
+  await assert.rejects(
+    submitDustRecipe(facade, original, "deregister"),
+    (error) => error === failure,
+  );
+  assert.deepEqual(reverted, [balanced]);
+});
+
+test("DUST registration finalizes directly; deregistration and redesignation add a DUST fee", async () => {
+  type Recipe = Parameters<typeof submitDustRecipe>[1];
+  const original = { transaction: { id: "original" } } as unknown as Recipe;
+  const balanced = { transaction: { id: "balanced" } } as unknown as Recipe;
+  for (const action of ["register", "deregister", "redesignate"] as const) {
+    let balances = 0;
+    const facade = {
+      async balanceUnprovenTransaction(
+        tx: unknown,
+        options: { tokenKindsToBalance: string[] },
+      ) {
+        balances++;
+        assert.equal(tx, original.transaction);
+        assert.deepEqual(options.tokenKindsToBalance, ["dust"]);
+        return balanced;
+      },
+      async finalizeRecipe(recipe: unknown) {
+        assert.equal(recipe, action === "register" ? original : balanced);
+        return "finalized";
+      },
+      async submitTransaction(tx: unknown) {
+        assert.equal(tx, "finalized");
+        return "identifier";
+      },
+      async revert() {
+        assert.fail("successful recipe must not be reverted");
+      },
+    } as unknown as Parameters<typeof submitDustRecipe>[0];
+    assert.equal(
+      await submitDustRecipe(facade, original, action),
+      "identifier",
+    );
+    assert.equal(balances, action === "register" ? 0 : 1);
+  }
 });
 
 test("combined transfers contain one output of each token kind", () => {
@@ -42,7 +117,10 @@ test("combined transfers contain one output of each token kind", () => {
     ),
   ).asString();
   const unshielded = PublicKey.fromKeyStore(
-    createKeystore(Buffer.alloc(32, 8), NETWORK_ID),
+    createKeystore(
+      { kind: "schnorr", secret: Buffer.alloc(32, 8) },
+      NETWORK_ID,
+    ),
   ).address;
 
   const outputs = createTokenTransfers([
@@ -54,8 +132,14 @@ test("combined transfers contain one output of each token kind", () => {
       amount: 2n,
     },
   ]);
-  assert.deepEqual(outputs.map((output) => output.type), ["unshielded", "shielded"]);
-  assert.deepEqual(outputs.map((output) => output.outputs[0].amount), [1n, 2n]);
+  assert.deepEqual(
+    outputs.map((output) => output.type),
+    ["unshielded", "shielded"],
+  );
+  assert.deepEqual(
+    outputs.map((output) => output.outputs[0].amount),
+    [1n, 2n],
+  );
 });
 
 test("transfer balance checks aggregate outputs by token type", () => {
@@ -66,23 +150,44 @@ test("transfer balance checks aggregate outputs by token type", () => {
   };
   assert.doesNotThrow(() =>
     assertSufficientBalances(state, [
-      { kind: "shielded", recipient: "unused", tokenType: shieldedType, amount: 3n },
+      {
+        kind: "shielded",
+        recipient: "unused",
+        tokenType: shieldedType,
+        amount: 3n,
+      },
       { kind: "unshielded", recipient: "unused", amount: 5n },
     ]),
   );
   assert.throws(
     () =>
       assertSufficientBalances(state, [
-        { kind: "shielded", recipient: "unused", tokenType: shieldedType, amount: 2n },
-        { kind: "shielded", recipient: "unused", tokenType: shieldedType, amount: 2n },
+        {
+          kind: "shielded",
+          recipient: "unused",
+          tokenType: shieldedType,
+          amount: 2n,
+        },
+        {
+          kind: "shielded",
+          recipient: "unused",
+          tokenType: shieldedType,
+          amount: 2n,
+        },
       ]),
     /need 4, available 3/,
   );
 });
 
 test("DUST actions select only coins with the required registration state", () => {
-  const unregistered = { id: "new", meta: { registeredForDustGeneration: false } };
-  const registered = { id: "existing", meta: { registeredForDustGeneration: true } };
+  const unregistered = {
+    id: "new",
+    meta: { registeredForDustGeneration: false },
+  };
+  const registered = {
+    id: "existing",
+    meta: { registeredForDustGeneration: true },
+  };
   const coins = [unregistered, registered];
 
   assert.deepEqual(selectDustCoins(coins, "register"), [unregistered]);

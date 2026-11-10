@@ -1,5 +1,5 @@
 // Synchronizes and prints wallet balances.
-import * as ledger from "@midnight-ntwrk/ledger-v8";
+import * as ledger from "@midnightntwrk/ledger-v9";
 import { formatUnits } from "../amounts";
 import { buildWallet, startAndSync, stopWallet } from "../wallet";
 

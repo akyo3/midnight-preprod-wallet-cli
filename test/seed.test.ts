@@ -14,7 +14,9 @@ test("seed parser accepts exactly 32 bytes of hexadecimal data", () => {
 });
 
 test("a generated seed is private and stable across reloads", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "midnight-wallet-seed-"));
+  const directory = await mkdtemp(
+    path.join(os.tmpdir(), "midnight-wallet-seed-"),
+  );
   const file = path.join(directory, "seed");
   const previousSeed = process.env.WALLET_SEED;
   const previousFile = process.env.WALLET_SEED_FILE;

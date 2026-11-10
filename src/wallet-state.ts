@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-export type WalletStateKind = "dust" | "shielded" | "unshielded";
+export type WalletStateKind = "dust" | "shielded" | "unshielded" | "history";
 
 function stateDirectory() {
   return path.resolve(process.env.WALLET_STATE_DIR ?? ".wallet-state");
@@ -10,7 +10,9 @@ function stateDirectory() {
 
 function statePath(walletId: string, kind: WalletStateKind) {
   if (!/^[a-z0-9-]+$/i.test(walletId)) {
-    throw new Error("Wallet state ID may contain only letters, numbers, and hyphens.");
+    throw new Error(
+      "Wallet state ID may contain only letters, numbers, and hyphens.",
+    );
   }
   return path.join(stateDirectory(), `${walletId}-${kind}.json`);
 }
@@ -25,7 +27,9 @@ async function readState(file: string): Promise<string | undefined> {
 }
 
 /** Reads the old DUST-only checkpoint so existing wallets do not lose hours of sync progress. */
-export async function loadDustState(publicKey: bigint): Promise<string | undefined> {
+export async function loadDustState(
+  publicKey: bigint,
+): Promise<string | undefined> {
   return await readState(path.join(stateDirectory(), `dust-${publicKey}.json`));
 }
 
