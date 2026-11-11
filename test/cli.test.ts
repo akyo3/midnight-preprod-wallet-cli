@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtemp, rm, stat } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   parseBaseUnits,
+  parseCommand,
   parseCombinedSendArguments,
   parseNightAmount,
   parseSendArguments,
@@ -64,4 +70,62 @@ test("single argument commands reject missing or extra values", () => {
   assert.equal(parseSingleArgument(["--", "dust"], "usage"), "dust");
   assert.throws(() => parseSingleArgument([], "usage"), /usage/);
   assert.throws(() => parseSingleArgument(["one", "two"], "usage"), /usage/);
+});
+
+test("history supports the separator, normalizes hashes and rejects extra arguments", () => {
+  const hash = "AB".repeat(32);
+  assert.deepEqual(parseCommand("history", ["--", hash]), {
+    command: "history",
+    hash: hash.toLowerCase(),
+  });
+  assert.deepEqual(parseCommand("history", []), {
+    command: "history",
+    hash: undefined,
+  });
+  assert.throws(() => parseCommand("history", ["invalid"]), /Usage/);
+  assert.throws(() => parseCommand("history", [hash, hash]), /Usage/);
+  for (const command of [
+    "address",
+    "balance",
+    "register-dust",
+    "deregister-dust",
+  ]) {
+    assert.throws(() => parseCommand(command, ["unexpected"]), /Usage/);
+  }
+});
+
+test("invalid command syntax exits before creating a wallet seed", async () => {
+  const directory = await mkdtemp(
+    path.join(os.tmpdir(), "midnight-cli-arguments-"),
+  );
+  const seedFile = path.join(directory, "seed");
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        import.meta.resolve("tsx"),
+        fileURLToPath(new URL("../src/index.ts", import.meta.url)),
+        "send",
+        "unused-recipient",
+        "0",
+      ],
+      {
+        cwd: directory,
+        env: {
+          ...process.env,
+          WALLET_SEED: "",
+          WALLET_SEED_FILE: seedFile,
+          BLOCKFROST_PROJECT_ID: "",
+        },
+        encoding: "utf8",
+        timeout: 10_000,
+      },
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /greater than zero/);
+    await assert.rejects(stat(seedFile), { code: "ENOENT" });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

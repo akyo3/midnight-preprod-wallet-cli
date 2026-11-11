@@ -8,7 +8,9 @@ const SEED_HEX_LENGTH = 64;
 export function parseSeed(value: string): Buffer {
   const hex = value.trim().replace(/^0x/i, "");
   if (!new RegExp(`^[0-9a-fA-F]{${SEED_HEX_LENGTH}}$`).test(hex)) {
-    throw new Error("Wallet seed must be exactly 32 bytes encoded as 64 hexadecimal characters.");
+    throw new Error(
+      "Wallet seed must be exactly 32 bytes encoded as 64 hexadecimal characters.",
+    );
   }
   return Buffer.from(hex, "hex");
 }
@@ -36,13 +38,17 @@ export async function loadOrCreateSeed(): Promise<Buffer> {
   await mkdir(path.dirname(file), { recursive: true });
 
   try {
-    await writeFile(file, `${seed.toString("hex")}\n`, { flag: "wx", mode: 0o600 });
+    await writeFile(file, `${seed.toString("hex")}\n`, {
+      flag: "wx",
+      mode: 0o600,
+    });
     console.log(`Created a new wallet seed in ${file}`);
     return seed;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
     const concurrentlyCreated = await readSeedFile(file);
-    if (!concurrentlyCreated) throw new Error(`Unable to read wallet seed from ${file}`);
+    if (!concurrentlyCreated)
+      throw new Error(`Unable to read wallet seed from ${file}`);
     return concurrentlyCreated;
   }
 }
